@@ -30,15 +30,12 @@ public class HighFPSPatcher
             {
                 ModuleDefinition module = assembly.MainModule;
 
-                // Load our helper DLL
                 AssemblyDefinition logicAssembly = AssemblyDefinition.ReadAssembly(logicDllPath);
                 TypeDefinition fpsManagerType = logicAssembly.MainModule.Types.First(t => t.Name == "FPSManager");
 
-                // Import methods
                 MethodReference preDrawMethod    = module.ImportReference(fpsManagerType.Methods.First(m => m.Name == "PreDraw"));
                 MethodReference postDrawMethod   = module.ImportReference(fpsManagerType.Methods.First(m => m.Name == "PostDraw"));
                 MethodReference updateMouseMethod = module.ImportReference(fpsManagerType.Methods.First(m => m.Name == "UpdateMouse"));
-                MethodReference postUpdateMethod  = module.ImportReference(fpsManagerType.Methods.First(m => m.Name == "PostUpdate"));
 
                 TypeDefinition mainType = module.Types.First(t => t.FullName == "Terraria.Main");
 
@@ -56,25 +53,20 @@ public class HighFPSPatcher
                     }
                 }
 
-                // Patch DrawInterface_36_Cursor: forward-extrapolate mouse position right
-                // before the cursor sprite is drawn so it tracks at render framerate.
-                Console.WriteLine("Patching Main.DrawInterface_36_Cursor...");
-                MethodDefinition cursorMethod = mainType.Methods.First(m => m.Name == "DrawInterface_36_Cursor");
-                {
-                    var il = cursorMethod.Body.GetILProcessor();
-                    il.InsertBefore(cursorMethod.Body.Instructions[0], il.Create(OpCodes.Call, updateMouseMethod));
-                }
-
-                // Patch DoUpdate: capture mouse position after each 60Hz tick so
-                // UpdateMouse can extrapolate it smoothly between frames.
-                Console.WriteLine("Patching Main.DoUpdate...");
-                MethodDefinition updateMethod = mainType.Methods.First(m => m.Name == "DoUpdate" && m.Parameters.Count == 1);
+                // Patch Update: inject UpdateMouse() before DoUpdate call
+                Console.WriteLine("Patching Main.Update...");
+                MethodDefinition updateMethod = mainType.Methods.First(m => m.Name == "Update" && m.Parameters.Count == 1);
                 {
                     var il = updateMethod.Body.GetILProcessor();
-                    foreach (var instr in updateMethod.Body.Instructions.ToList()) {
-                        if (instr.OpCode == OpCodes.Ret)
-                            il.InsertBefore(instr, il.Create(OpCodes.Call, postUpdateMethod));
-                    }
+                    // Find the DoUpdate call instruction
+                    var doUpdateCall = updateMethod.Body.Instructions
+                        .First(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                    && i.Operand.ToString().Contains("DoUpdate"));
+                    // Walk back to the ldarg.0 that loads 'this' before DoUpdate
+                    var insertPoint = doUpdateCall;
+                    while (insertPoint.Previous != null && insertPoint.Previous.OpCode != OpCodes.Call && insertPoint.Previous.OpCode != OpCodes.Callvirt)
+                        insertPoint = insertPoint.Previous;
+                    il.InsertBefore(insertPoint, il.Create(OpCodes.Call, updateMouseMethod));
                 }
 
                 Console.WriteLine("Saving to " + outputPath);

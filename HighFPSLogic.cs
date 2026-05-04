@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Terraria;
+using Terraria.GameInput;
 
 namespace HighFPSLogic
 {
@@ -11,52 +12,61 @@ namespace HighFPSLogic
         private static Vector2[] _origNpcPos = new Vector2[201];
         private static Vector2[] _origProjPos = new Vector2[1001];
 
-        // Mouse interpolation — DoUpdate-space coordinates only, no raw SDL pixels.
-        private static int _prevMouseX, _prevMouseY;
-        private static int _currMouseX, _currMouseY;
-        private static bool _mouseInitialized;
-
         public static void Initialize() {}
         public static bool ShouldUpdate(ref GameTime gameTime) { return true; }
         public static Vector2 GetInterpolatedPosition(Vector2 pos) { return pos; }
 
-        // Called at the end of every DoUpdate to capture mouse position in game-space.
-        public static void PostUpdate()
-        {
-            if (!_mouseInitialized)
-            {
-                _prevMouseX = _currMouseX = Main.mouseX;
-                _prevMouseY = _currMouseY = Main.mouseY;
-                _mouseInitialized = true;
-            }
-            else
-            {
-                _prevMouseX = _currMouseX;
-                _prevMouseY = _currMouseY;
-                _currMouseX = Main.mouseX;
-                _currMouseY = Main.mouseY;
-            }
-        }
-
-        // Called right before DrawInterface_36_Cursor. Forward-extrapolates mouse position
-        // from the last two DoUpdate samples so the cursor tracks smoothly at render rate.
+        // Called at the start of Main.Update(), before DoUpdate fires.
+        // On partial ticks DoUpdate won't run, so we push fresh hardware mouse
+        // coords through the same pipeline DoUpdate would use, letting SetZoom_UI
+        // (called later in DoDraw) transform them correctly into cursor position.
         public static void UpdateMouse()
-        {
-            if (!_mouseInitialized || (int)Main.FrameSkipMode != 0) return;
-            float f = Math.Min((float)(Main.UpdateTimeAccumulator * 60.0), 1.0f);
-            int vx = _currMouseX - _prevMouseX;
-            int vy = _currMouseY - _prevMouseY;
-            Main.mouseX = _currMouseX + (int)(vx * f);
-            Main.mouseY = _currMouseY + (int)(vy * f);
-        }
-
-        public static void PreDraw()
         {
             if ((int)Main.FrameSkipMode != 0) return;
 
+            // IsPartialTick: accumulator hasn't crossed a full 60Hz tick boundary yet.
+            // On full ticks DoUpdate runs and overwrites with the same hardware value anyway.
+            double accumulator = Main.UpdateTimeAccumulator;
+            bool isPartialTick = accumulator < (1.0 / 60.0);
+            if (!isPartialTick) return;
+
+            MouseState state = Mouse.GetState();
+            MouseState old = PlayerInput.MouseInfo;
+            // Mirror exactly what DoUpdate's MouseInput() does: apply RawMouseScale
+            PlayerInput.MouseX = (int)(state.X * PlayerInput.RawMouseScale.X);
+            PlayerInput.MouseY = (int)(state.Y * PlayerInput.RawMouseScale.Y);
+            // Preserve button state from the last real update
+            PlayerInput.MouseInfo = new MouseState(
+                state.X, state.Y,
+                old.ScrollWheelValue,
+                old.LeftButton, old.MiddleButton, old.RightButton,
+                old.XButton1, old.XButton2);
+            PlayerInput.UpdateMainMouse();
+            PlayerInput.CacheMousePositionForZoom();
+        }
+
+        private static int _prevSkipMode = -1;
+        private static bool _skipNextFrame = false;
+        private static bool _didSave = false;
+
+        public static void PreDraw()
+        {
+            _didSave = false;
+
+            int curMode = (int)Main.FrameSkipMode;
+            if (curMode != _prevSkipMode)
+            {
+                _prevSkipMode = curMode;
+                if (curMode == 0) _skipNextFrame = true;
+            }
+
+            if (curMode != 0) return;
             if (Main.gameMenu) return;
 
-            float interpolationFactor = (float)(Main.UpdateTimeAccumulator * 60.0) - 1.0f;
+            if (_skipNextFrame) { _skipNextFrame = false; return; }
+
+            double acc = Main.UpdateTimeAccumulator;
+            float interpolationFactor = Math.Max(-1.0f, Math.Min(0.0f, (float)(acc * 60.0) - 1.0f));
 
             if (Main.player != null)
             {
@@ -93,10 +103,13 @@ namespace HighFPSLogic
                     }
                 }
             }
+
+            _didSave = true;
         }
 
         public static void PostDraw()
         {
+            if (!_didSave) return;
             if ((int)Main.FrameSkipMode != 0 || Main.gameMenu) return;
 
             if (Main.player != null)

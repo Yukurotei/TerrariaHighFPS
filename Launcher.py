@@ -180,6 +180,11 @@ class TerrariaLauncher:
                 self.create_patch()
                 return
             shutil.copy2(highfps_exe, exe_path)
+            # Always sync the logic DLL so it matches the patched exe
+            logic_dll_src = os.path.join(WORK_DIR, "HighFPSLogic.dll")
+            logic_dll_dst = os.path.join(self.game_dir, "HighFPSLogic.dll")
+            if os.path.exists(logic_dll_src):
+                shutil.copy2(logic_dll_src, logic_dll_dst)
         else:
             shutil.copy2(vanilla_bak, exe_path)
 
