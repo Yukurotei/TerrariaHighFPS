@@ -2,6 +2,14 @@
 
 A standalone patcher for vanilla **Terraria 1.4.5** that adds high-FPS interpolation — identical in effect to the [HighFPSSupport](https://steamcommunity.com/sharedfiles/filedetails/?id=3119712528) tModLoader mod, but without tModLoader, so **Steam achievements stay enabled**.
 
+## Compatible Platforms
+
+| Platform | Supported |
+|---|---|
+| 🪟 Windows | ✅ |
+| 🍎 macOS | ✅ |
+| 🐧 Linux | ✅ |
+
 ## How it works
 
 The patcher uses Mono.Cecil to inject IL code directly into `Terraria.exe`. It hooks into the game's draw loop to interpolate entity positions (players, NPCs, projectiles, pets) between 60 Hz logic ticks, making movement appear smooth at any framerate. The game's own `UpdateTimeAccumulator` is used as the interpolation factor, so it works with whatever FPS your machine can push.
@@ -13,7 +21,8 @@ The patcher uses Mono.Cecil to inject IL code directly into `Terraria.exe`. It h
 - Terraria 1.4.5 (Steam)
 - Python 3 with `tkinter` (usually bundled)
 - **Windows:** nothing extra
-- **Linux/Mac:** `mono` runtime (`sudo apt install mono-runtime` or equivalent)
+- **macOS:** `mono` runtime (`brew install mono`)
+- **Linux:** `mono` runtime (`sudo apt install mono-runtime` or equivalent)
 
 ## Setup
 
@@ -51,6 +60,7 @@ You can edit this manually if needed. The launcher looks for `Terraria.exe` insi
 
 Default paths it tries automatically:
 - **Windows:** `C:\Program Files (x86)\Steam\steamapps\common\Terraria`
+- **macOS:** `~/Library/Application Support/Steam/steamapps/common/Terraria/Terraria.app/Contents/Resources`
 - **Linux:** `/data/SteamLibrary/steamapps/common/Terraria`
 
 ## Steam Integration

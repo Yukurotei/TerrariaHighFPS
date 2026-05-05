@@ -13,6 +13,7 @@ PATCHER_EXE = os.path.join(WORK_DIR, "Patcher.exe")
 CONFIG_FILE = os.path.join(WORK_DIR, "config.json")
 
 IS_WINDOWS = platform.system() == "Windows"
+IS_MAC = platform.system() == "Darwin"
 
 class TerrariaLauncher:
     def __init__(self, root, steam_command=None):
@@ -29,10 +30,15 @@ class TerrariaLauncher:
 
     def load_game_dir(self):
         if IS_WINDOWS:
-            default_dir = r"C:\Program Files (x86)\Steam\steamapps\common\Terraria"
+            default_dirs = [r"C:\Program Files (x86)\Steam\steamapps\common\Terraria"]
+        elif IS_MAC:
+            resources = "Terraria.app/Contents/Resources"
+            default_dirs = [
+                os.path.join(os.path.expanduser("~/Library/Application Support/Steam/steamapps/common/Terraria"), resources),
+            ]
         else:
-            default_dir = "/data/SteamLibrary/steamapps/common/Terraria"
-        
+            default_dirs = ["/data/SteamLibrary/steamapps/common/Terraria"]
+
         # Try loading from config
         if os.path.exists(CONFIG_FILE):
             try:
@@ -43,25 +49,43 @@ class TerrariaLauncher:
                         return saved_dir
             except:
                 pass
-                
-        # Try default
-        if os.path.exists(os.path.join(default_dir, "Terraria.exe")):
-            self.save_game_dir(default_dir)
-            return default_dir
-            
+
+        # Try defaults
+        for default_dir in default_dirs:
+            if os.path.exists(os.path.join(default_dir, "Terraria.exe")):
+                self.save_game_dir(default_dir)
+                return default_dir
+
         # Ask user
         return self.prompt_for_directory()
 
+    def resolve_mac_dir(self, selected_dir):
+        """If user selects the Terraria Steam folder or .app bundle, resolve to Resources."""
+        candidates = [
+            selected_dir,
+            os.path.join(selected_dir, "Terraria.app/Contents/Resources"),
+            os.path.join(selected_dir, "Contents/Resources"),
+        ]
+        for path in candidates:
+            if os.path.exists(os.path.join(path, "Terraria.exe")):
+                return path
+        return selected_dir
+
     def prompt_for_directory(self):
-        messagebox.showinfo("Select Terraria Folder", "Could not automatically find Terraria. Please select your 'Terraria' installation folder (where Terraria.exe is located).")
+        if IS_MAC:
+            msg = "Could not automatically find Terraria. Please select your 'Terraria' folder inside Steam (usually ~/Library/Application Support/Steam/steamapps/common/Terraria)."
+        else:
+            msg = "Could not automatically find Terraria. Please select your 'Terraria' installation folder (where Terraria.exe is located)."
+        messagebox.showinfo("Select Terraria Folder", msg)
         while True:
             selected_dir = filedialog.askdirectory(title="Select Terraria Directory")
-            if not selected_dir: # User cancelled
+            if not selected_dir:
                 sys.exit(0)
-                
-            if os.path.exists(os.path.join(selected_dir, "Terraria.exe")):
-                self.save_game_dir(selected_dir)
-                return selected_dir
+
+            resolved = self.resolve_mac_dir(selected_dir) if IS_MAC else selected_dir
+            if os.path.exists(os.path.join(resolved, "Terraria.exe")):
+                self.save_game_dir(resolved)
+                return resolved
             else:
                 messagebox.showerror("Error", "Terraria.exe not found in that folder. Please try again.")
 
@@ -74,12 +98,15 @@ class TerrariaLauncher:
 
     def change_directory(self):
         new_dir = filedialog.askdirectory(title="Select Terraria Directory")
-        if new_dir and os.path.exists(os.path.join(new_dir, "Terraria.exe")):
-            self.game_dir = new_dir
-            self.save_game_dir(new_dir)
+        if not new_dir:
+            return
+        resolved = self.resolve_mac_dir(new_dir) if IS_MAC else new_dir
+        if os.path.exists(os.path.join(resolved, "Terraria.exe")):
+            self.game_dir = resolved
+            self.save_game_dir(resolved)
             self.check_status()
             messagebox.showinfo("Success", "Game directory updated successfully!")
-        elif new_dir:
+        else:
             messagebox.showerror("Error", "Terraria.exe not found in that folder.")
 
     def setup_ui(self):
@@ -198,6 +225,9 @@ class TerrariaLauncher:
                 # CLI Mode: Run the standard launcher
                 if IS_WINDOWS:
                     subprocess.Popen([exe_path], cwd=self.game_dir)
+                elif IS_MAC:
+                    mac_launcher = os.path.normpath(os.path.join(self.game_dir, "..", "..", "MacOS", "Terraria"))
+                    subprocess.Popen([mac_launcher], cwd=self.game_dir)
                 else:
                     subprocess.Popen([os.path.join(self.game_dir, "Terraria")], cwd=self.game_dir)
             
