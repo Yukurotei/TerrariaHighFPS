@@ -19,9 +19,9 @@ The patcher uses Mono.Cecil to inject IL code directly into `Terraria.exe`. It h
 ## Requirements
 
 - Terraria 1.4.5 (Steam)
-- Python 3 with `tkinter` (usually bundled,)
+- Python 3 with `tkinter` (usually bundled)
 - **Windows:** nothing extra
-- **macOS:** `mono` runtime (`brew install mono`)
+- **macOS:** `mono` runtime (`brew install mono` or equivalent)
 - **Linux:** `mono` runtime (`sudo apt install mono-runtime` or equivalent)
 
 ## Setup
