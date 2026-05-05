@@ -220,13 +220,14 @@ class TerrariaLauncher:
         try:
             if self.steam_command:
                 # Steam Mode: Execute the command Steam gave us
+                print("DEBUG steam_command:", self.steam_command)
                 subprocess.Popen(self.steam_command, cwd=self.game_dir)
             else:
                 # CLI Mode: Run the standard launcher
                 if IS_WINDOWS:
                     subprocess.Popen([exe_path], cwd=self.game_dir)
                 elif IS_MAC:
-                    mac_launcher = os.path.normpath(os.path.join(self.game_dir, "..", "..", "MacOS", "Terraria"))
+                    mac_launcher = os.path.normpath(os.path.join(self.game_dir, "..", "MacOS", "Terraria"))
                     subprocess.Popen([mac_launcher], cwd=self.game_dir)
                 else:
                     subprocess.Popen([os.path.join(self.game_dir, "Terraria")], cwd=self.game_dir)
