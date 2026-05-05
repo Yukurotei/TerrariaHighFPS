@@ -8,9 +8,26 @@ namespace HighFPSLogic
 {
     public static class FPSManager
     {
-        private static Vector2[] _origPlayerPos = new Vector2[256];
-        private static Vector2[] _origNpcPos = new Vector2[201];
+        private static Vector2[] _origPlayerPos      = new Vector2[256];
+        private static float[]   _origPlayerItemRot  = new float[256];
+        private static float[]   _lastPlayerItemRot  = new float[256];
+        private static float[]   _playerItemRotDelta = new float[256];
+        private static Vector2[] _origPlayerItemLoc  = new Vector2[256];
+        private static Vector2[] _lastPlayerItemLoc  = new Vector2[256];
+        private static Vector2[] _playerItemLocDelta = new Vector2[256];
+        private static int[]     _lastPlayerItemAnim = new int[256];
+
+        private static float WrapAngle(float a)
+        {
+            const float TwoPi = 2f * (float)Math.PI;
+            a %= TwoPi;
+            if (a > Math.PI)  a -= TwoPi;
+            if (a < -Math.PI) a += TwoPi;
+            return a;
+        }
+        private static Vector2[] _origNpcPos  = new Vector2[201];
         private static Vector2[] _origProjPos = new Vector2[1001];
+
 
         public static void Initialize() {}
         public static bool ShouldUpdate(ref GameTime gameTime) { return true; }
@@ -76,6 +93,33 @@ namespace HighFPSLogic
                     {
                         _origPlayerPos[i] = Main.player[i].position;
                         Main.player[i].position += Main.player[i].velocity * interpolationFactor;
+
+                        _origPlayerItemRot[i] = Main.player[i].itemRotation;
+                        _origPlayerItemLoc[i] = Main.player[i].itemLocation;
+                        int anim = Main.player[i].itemAnimation;
+                        bool midSwing = anim > 1 && _lastPlayerItemAnim[i] > 1;
+                        _lastPlayerItemAnim[i] = anim;
+                        if (midSwing)
+                        {
+                            if (_origPlayerItemRot[i] != _lastPlayerItemRot[i]) {
+                                _playerItemRotDelta[i] = WrapAngle(_origPlayerItemRot[i] - _lastPlayerItemRot[i]);
+                                _lastPlayerItemRot[i] = _origPlayerItemRot[i];
+                            }
+                            Main.player[i].itemRotation += _playerItemRotDelta[i] * interpolationFactor;
+
+                            if (_origPlayerItemLoc[i] != _lastPlayerItemLoc[i]) {
+                                _playerItemLocDelta[i] = _origPlayerItemLoc[i] - _lastPlayerItemLoc[i];
+                                _lastPlayerItemLoc[i] = _origPlayerItemLoc[i];
+                            }
+                            Main.player[i].itemLocation += _playerItemLocDelta[i] * interpolationFactor;
+                        }
+                        else
+                        {
+                            _playerItemRotDelta[i] = 0f;
+                            _playerItemLocDelta[i] = Vector2.Zero;
+                            _lastPlayerItemRot[i] = _origPlayerItemRot[i];
+                            _lastPlayerItemLoc[i] = _origPlayerItemLoc[i];
+                        }
                     }
                 }
             }
@@ -119,6 +163,8 @@ namespace HighFPSLogic
                     if (Main.player[i] != null && Main.player[i].active)
                     {
                         Main.player[i].position = _origPlayerPos[i];
+                        Main.player[i].itemRotation = _origPlayerItemRot[i];
+                        Main.player[i].itemLocation = _origPlayerItemLoc[i];
                     }
                 }
             }
