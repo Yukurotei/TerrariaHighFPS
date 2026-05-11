@@ -20,9 +20,18 @@ public class HighFPSPatcher
         DefaultAssemblyResolver resolver = new DefaultAssemblyResolver();
         resolver.AddSearchDirectory(Path.GetDirectoryName(inputPath));
 
+        // On Windows, XNA lives in the GAC which DefaultAssemblyResolver doesn't enumerate
+        string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        foreach (var gacFolder in new[] { "GAC_32", "GAC_64", "GAC_MSIL" }) {
+            string gacPath = Path.Combine(winDir, "Microsoft.NET", "assembly", gacFolder);
+            if (!Directory.Exists(gacPath)) continue;
+            foreach (var asmDir in Directory.GetDirectories(gacPath, "Microsoft.Xna*"))
+                foreach (var verDir in Directory.GetDirectories(asmDir))
+                    resolver.AddSearchDirectory(verDir);
+        }
+
         ReaderParameters readerParams = new ReaderParameters {
-            AssemblyResolver = resolver,
-            ReadWrite = true
+            AssemblyResolver = resolver
         };
 
         try {

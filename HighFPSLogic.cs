@@ -16,6 +16,7 @@ namespace HighFPSLogic
         private static Vector2[] _lastPlayerItemLoc  = new Vector2[256];
         private static Vector2[] _playerItemLocDelta = new Vector2[256];
         private static int[]     _lastPlayerItemAnim = new int[256];
+        private static Vector2[] _prevFramePlayerPos = new Vector2[256];
 
         private static float WrapAngle(float a)
         {
@@ -45,6 +46,7 @@ namespace HighFPSLogic
             // On full ticks DoUpdate runs and overwrites with the same hardware value anyway.
             double accumulator = Main.UpdateTimeAccumulator;
             bool isPartialTick = accumulator < (1.0 / 60.0);
+            _fullTickRan = !isPartialTick;
             if (!isPartialTick) return;
 
             MouseState state = Mouse.GetState();
@@ -65,6 +67,7 @@ namespace HighFPSLogic
         private static int _prevSkipMode = -1;
         private static bool _skipNextFrame = false;
         private static bool _didSave = false;
+        private static bool _fullTickRan = false;
 
         public static void PreDraw()
         {
@@ -91,25 +94,37 @@ namespace HighFPSLogic
                 {
                     if (Main.player[i] != null && Main.player[i].active)
                     {
-                        _origPlayerPos[i] = Main.player[i].position;
-                        Main.player[i].position += Main.player[i].velocity * interpolationFactor;
+                        Vector2 curPos = Main.player[i].position;
+                        // Detect teleport (pet slime, hooks, etc.): skip interpolation this frame
+                        bool teleported = _prevFramePlayerPos[i] != Vector2.Zero &&
+                            (curPos - _prevFramePlayerPos[i]).LengthSquared() > 300f * 300f;
+                        _prevFramePlayerPos[i] = curPos;
+
+                        _origPlayerPos[i] = curPos;
+                        if (!teleported)
+                            Main.player[i].position += Main.player[i].velocity * interpolationFactor;
 
                         _origPlayerItemRot[i] = Main.player[i].itemRotation;
                         _origPlayerItemLoc[i] = Main.player[i].itemLocation;
                         int anim = Main.player[i].itemAnimation;
-                        bool midSwing = anim > 1 && _lastPlayerItemAnim[i] > 1;
+                        bool midSwing = !teleported && anim > 1 && _lastPlayerItemAnim[i] > 1;
                         _lastPlayerItemAnim[i] = anim;
                         if (midSwing)
                         {
                             if (_origPlayerItemRot[i] != _lastPlayerItemRot[i]) {
                                 _playerItemRotDelta[i] = WrapAngle(_origPlayerItemRot[i] - _lastPlayerItemRot[i]);
                                 _lastPlayerItemRot[i] = _origPlayerItemRot[i];
+                            } else if (_fullTickRan) {
+                                // Full tick ran but rotation didn't change = charge hold; clear stale delta
+                                _playerItemRotDelta[i] = 0f;
                             }
                             Main.player[i].itemRotation += _playerItemRotDelta[i] * interpolationFactor;
 
                             if (_origPlayerItemLoc[i] != _lastPlayerItemLoc[i]) {
                                 _playerItemLocDelta[i] = _origPlayerItemLoc[i] - _lastPlayerItemLoc[i];
                                 _lastPlayerItemLoc[i] = _origPlayerItemLoc[i];
+                            } else if (_fullTickRan) {
+                                _playerItemLocDelta[i] = Vector2.Zero;
                             }
                             Main.player[i].itemLocation += _playerItemLocDelta[i] * interpolationFactor;
                         }
@@ -128,7 +143,7 @@ namespace HighFPSLogic
             {
                 for (int i = 0; i < 200; i++)
                 {
-                    if (Main.npc[i] != null && Main.npc[i].active)
+                    if (Main.npc[i] != null && Main.npc[i].active && !Main.npc[i].friendly)
                     {
                         _origNpcPos[i] = Main.npc[i].position;
                         Main.npc[i].position += Main.npc[i].velocity * interpolationFactor;
@@ -173,7 +188,7 @@ namespace HighFPSLogic
             {
                 for (int i = 0; i < 200; i++)
                 {
-                    if (Main.npc[i] != null && Main.npc[i].active)
+                    if (Main.npc[i] != null && Main.npc[i].active && !Main.npc[i].friendly)
                     {
                         Main.npc[i].position = _origNpcPos[i];
                     }
