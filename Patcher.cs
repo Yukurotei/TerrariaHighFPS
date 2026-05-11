@@ -4,6 +4,15 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using System.IO;
 
+class FallbackResolver : DefaultAssemblyResolver
+{
+    public override AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
+    {
+        try { return base.Resolve(name, parameters); }
+        catch (AssemblyResolutionException) { return null; }
+    }
+}
+
 public class HighFPSPatcher
 {
     public static void Main(string[] args)
@@ -17,18 +26,8 @@ public class HighFPSPatcher
         string outputPath = args[1];
         string logicDllPath = args[2];
 
-        DefaultAssemblyResolver resolver = new DefaultAssemblyResolver();
+        var resolver = new FallbackResolver();
         resolver.AddSearchDirectory(Path.GetDirectoryName(inputPath));
-
-        // On Windows, XNA lives in the GAC which DefaultAssemblyResolver doesn't enumerate
-        string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        foreach (var gacFolder in new[] { "GAC_32", "GAC_64", "GAC_MSIL" }) {
-            string gacPath = Path.Combine(winDir, "Microsoft.NET", "assembly", gacFolder);
-            if (!Directory.Exists(gacPath)) continue;
-            foreach (var asmDir in Directory.GetDirectories(gacPath, "Microsoft.Xna*"))
-                foreach (var verDir in Directory.GetDirectories(asmDir))
-                    resolver.AddSearchDirectory(verDir);
-        }
 
         ReaderParameters readerParams = new ReaderParameters {
             AssemblyResolver = resolver
